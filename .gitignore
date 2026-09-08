@@ -5,6 +5,7 @@
 *.swp
 *.apk
 *.aab
+*key.properties
 .DS_Store
 .atom/
 .buildlog/
