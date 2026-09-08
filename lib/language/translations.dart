@@ -46,6 +46,11 @@ class Messages extends Translations {
           "matchSummary": "Arama özetiyle eşleşti",
           "matchDescription": "Arama açıklamayla eşleşti",
           "matchStock": "Arama stok koduyla eşleşti",
+          "exactMatch": "Tam Eşleşen Ürün",
+          "showRelatedProducts": "İlişkili Ürünleri Göster",
+          "hideRelatedProducts": "İlişkili Ürünleri Gizle",
+          "relatedProductsHeader": "İlişkili Diğer Ürünler ve Parçalar",
+          "relatedProductsSubtitle": "Aynı kodu, alt modelleri veya yedek parçaları içeren diğer ürünler",
         },
         'en_US': {
           "langCode": 'en',
@@ -89,6 +94,11 @@ class Messages extends Translations {
           "matchSummary": "Matched in summary",
           "matchDescription": "Matched in description",
           "matchStock": "Matched in stock code",
+          "exactMatch": "Exact Match",
+          "showRelatedProducts": "Show Related Products",
+          "hideRelatedProducts": "Hide Related Products",
+          "relatedProductsHeader": "Related Products & Parts",
+          "relatedProductsSubtitle": "Other products containing this code, sub-models or parts",
         },
         'fr_FR': {
           "newProductTitle": "Nouveaux Produits",
@@ -131,6 +141,11 @@ class Messages extends Translations {
           "matchSummary": "Correspondance dans le résumé",
           "matchDescription": "Correspondance dans la description",
           "matchStock": "Correspondance dans le code produit",
+          "exactMatch": "Correspondance exacte",
+          "showRelatedProducts": "Afficher les produits associés",
+          "hideRelatedProducts": "Masquer les produits associés",
+          "relatedProductsHeader": "Autres produits et pièces associés",
+          "relatedProductsSubtitle": "Autres produits contenant ce code, sous-modèles ou pièces",
         },
         'ru_RU': {
           "newProductTitle": "новые продукты",
@@ -173,7 +188,12 @@ class Messages extends Translations {
           "matchName": "Совпадение в названии продукта",
           "matchSummary": "Совпадение в кратком описании",
           "matchDescription": "Совпадение в описании",
-          "matchStock": "Совпадение в коде запаса"
+          "matchStock": "Совпадение в коде запаса",
+          "exactMatch": "Точное совпадение",
+          "showRelatedProducts": "Показать похожие товары",
+          "hideRelatedProducts": "Скрыть похожие товары",
+          "relatedProductsHeader": "Связанные товары и запчасти",
+          "relatedProductsSubtitle": "Другие товары с этим кодом, субмоделями или запчастями",
         },
         'es_ES': {
           "newProductTitle": "Nuevos Productos",
@@ -216,7 +236,12 @@ class Messages extends Translations {
           "matchName": "Coincidencia en el nombre del producto",
           "matchSummary": "Coincidencia en el resumen",
           "matchDescription": "Coincidencia en la descripción",
-          "matchStock": "Coincidencia en el código de stock"
+          "matchStock": "Coincidencia en el código de stock",
+          "exactMatch": "Coincidencia exacta",
+          "showRelatedProducts": "Mostrar productos relacionados",
+          "hideRelatedProducts": "Ocultar productos relacionados",
+          "relatedProductsHeader": "Otros productos y repuestos relacionados",
+          "relatedProductsSubtitle": "Otros productos que contienen este código, submodelos o repuestos",
         }
       };
 }

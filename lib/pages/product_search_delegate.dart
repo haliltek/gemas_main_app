@@ -260,7 +260,12 @@ class ProductSearchDelegate extends SearchDelegate<Product?> {
         if (_isLoading && products.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
-        final list = _buildList(context, products);
+        final list = SearchResultsList(
+          key: ValueKey('${query}_${products.length}'),
+          query: query,
+          products: products,
+          highlightBuilder: _highlight,
+        );
         if (_isLoading) {
           return Stack(
             children: [
@@ -278,95 +283,393 @@ class ProductSearchDelegate extends SearchDelegate<Product?> {
       },
     );
   }
+}
 
-  Widget _buildList(BuildContext context, List<Product> products) {
-    if (products.isEmpty) {
+typedef HighlightBuilder = TextSpan Function(
+    BuildContext context, String source, String query, TextStyle style);
+
+class SearchResultsList extends StatefulWidget {
+  final String query;
+  final List<Product> products;
+  final HighlightBuilder highlightBuilder;
+
+  const SearchResultsList({
+    Key? key,
+    required this.query,
+    required this.products,
+    required this.highlightBuilder,
+  }) : super(key: key);
+
+  @override
+  State<SearchResultsList> createState() => _SearchResultsListState();
+}
+
+class _SearchResultsListState extends State<SearchResultsList> {
+  bool _isRelatedExpanded = false;
+
+  static String _normalize(String s) =>
+      s.replaceAll(RegExp(r'[\s\-_./]'), '').toLowerCase();
+
+  static String? _getExactMatchedStockCode(Product product, String q) {
+    final cleanQ = q.trim().toLowerCase();
+    final normQ = _normalize(cleanQ);
+    if (normQ.isEmpty) return null;
+
+    if (product.malzemeler != null) {
+      for (var m in product.malzemeler!) {
+        final code = m.stokKodu.trim().toLowerCase();
+        if (code == cleanQ || (normQ.length >= 3 && _normalize(code) == normQ)) {
+          return m.stokKodu;
+        }
+      }
+    }
+    return null;
+  }
+
+  static bool _isExactMatch(Product product, String q) {
+    final cleanQ = q.trim().toLowerCase();
+    final normQ = _normalize(cleanQ);
+    if (normQ.isEmpty) return false;
+
+    // 1. Check exact stock code match
+    if (_getExactMatchedStockCode(product, q) != null) return true;
+
+    // 2. Check exact product name match
+    final normAd = _normalize(product.ad);
+    if (product.ad.trim().toLowerCase() == cleanQ ||
+        (normQ.length >= 3 && normAd == normQ)) {
+      return true;
+    }
+    return false;
+  }
+
+  String _matchReason(Product product, String q) {
+    final lower = q.toLowerCase();
+    bool contains(String? t) => t?.toLowerCase().contains(lower) ?? false;
+    final exactCode = _getExactMatchedStockCode(product, q);
+    if (exactCode != null) {
+      return '${"exactMatch".tr}: $exactCode';
+    }
+    if (contains(product.ad)) return 'matchName'.tr;
+    if (contains(product.alinti)) return 'matchSummary'.tr;
+    if (contains(product.aciklama)) return 'matchDescription'.tr;
+    if (product.malzemeler?.any((m) => contains(m.stokKodu)) ?? false) {
+      return 'matchStock'.tr;
+    }
+    return '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.products.isEmpty) {
       return Center(child: Text('noResults'.tr));
     }
-    final sorted = [...products];
-    sorted.sort((a, b) {
-      final aMatch = _matchReason(a, query).isNotEmpty;
-      final bMatch = _matchReason(b, query).isNotEmpty;
-      if (aMatch == bMatch) return 0;
-      return aMatch ? -1 : 1;
-    });
-    return ListView.builder(
+
+    final query = widget.query.trim();
+
+    final exactMatches = <Product>[];
+    final relatedMatches = <Product>[];
+
+    for (final p in widget.products) {
+      if (_isExactMatch(p, query)) {
+        exactMatches.add(p);
+      } else {
+        relatedMatches.add(p);
+      }
+    }
+
+    final bool hasExactMatch = exactMatches.isNotEmpty;
+
+    if (hasExactMatch && relatedMatches.isNotEmpty) {
+      final cleanQ = query.toLowerCase();
+      relatedMatches.sort((a, b) {
+        final aHasStock = a.malzemeler
+                ?.any((m) => m.stokKodu.toLowerCase().contains(cleanQ)) ??
+            false;
+        final bHasStock = b.malzemeler
+                ?.any((m) => m.stokKodu.toLowerCase().contains(cleanQ)) ??
+            false;
+        if (aHasStock != bHasStock) return aHasStock ? -1 : 1;
+        return 0;
+      });
+    }
+
+    return ListView(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      itemCount: sorted.length,
-      itemBuilder: (context, index) {
-        final product = sorted[index];
-        return Card(
-          elevation: 1.0,
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProductPage(product: product),
-                ),
-              );
-            },
-            leading: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: product.urunFoto?.isNotEmpty == true
-                  ? CachedNetworkImage(
-                      imageUrl: Constants.DOMAIN + product.urunFoto!.first.foto,
-                      fit: BoxFit.cover,
-                    )
-                  : Image.asset('assets/images/unnamed.png', fit: BoxFit.cover),
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasExactMatch) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
               children: [
-                RichText(
-                  text: _highlight(
-                    context,
-                    product.ad,
-                    query,
-                    TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                Icon(Icons.check_circle,
+                    size: 18, color: Colors.green.shade700),
+                const SizedBox(width: 6),
+                Text(
+                  'exactMatch'.tr.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                    color: Colors.green.shade800,
                   ),
                 ),
-                if (product.alinti.isNotEmpty)
-                  RichText(
-                    text: _highlight(
-                        context,
-                        product.alinti,
-                        query,
-                        TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface)),
-                  )
-                else if (product.aciklama.isNotEmpty)
-                  RichText(
-                    text: _highlight(
-                        context,
-                        product.aciklama,
-                        query,
-                        TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface)),
+                const Spacer(),
+                Text(
+                  '${exactMatches.length} ürün',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
                   ),
-                if (_matchReason(product, query).isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      _matchReason(product, query),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
+                ),
               ],
             ),
           ),
-        );
-      },
+          ...exactMatches.map(
+              (product) => _buildProductCard(context, product, isExact: true)),
+          if (relatedMatches.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildRelatedButton(context, relatedMatches.length),
+            if (_isRelatedExpanded) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.alt_route,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.secondary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'relatedProductsHeader'.tr,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.secondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...relatedMatches.map((product) =>
+                  _buildProductCard(context, product, isExact: false)),
+            ],
+          ],
+        ] else ...[
+          ...widget.products.map(
+              (product) => _buildProductCard(context, product, isExact: false)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRelatedButton(BuildContext context, int count) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            setState(() {
+              _isRelatedExpanded = !_isRelatedExpanded;
+            });
+          },
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.primary.withOpacity(0.25),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isRelatedExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isRelatedExpanded
+                            ? 'hideRelatedProducts'.tr
+                            : '${"showRelatedProducts".tr} ($count)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'relatedProductsSubtitle'.tr,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _isRelatedExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: theme.colorScheme.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductCard(BuildContext context, Product product,
+      {required bool isExact}) {
+    final exactCode = _getExactMatchedStockCode(product, widget.query);
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: isExact ? 2.5 : 1.0,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: isExact
+            ? BorderSide(color: Colors.green.shade500, width: 1.5)
+            : BorderSide(color: Colors.grey.shade200, width: 0.8),
+      ),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProductPage(product: product),
+            ),
+          );
+        },
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: product.urunFoto?.isNotEmpty == true
+                ? CachedNetworkImage(
+                    imageUrl: Constants.DOMAIN + product.urunFoto!.first.foto,
+                    fit: BoxFit.cover,
+                  )
+                : Image.asset('assets/images/unnamed.png', fit: BoxFit.cover),
+          ),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: widget.highlightBuilder(
+                context,
+                product.ad,
+                widget.query,
+                TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: isExact
+                      ? Colors.green.shade900
+                      : theme.colorScheme.primary,
+                ),
+              ),
+            ),
+            if (exactCode != null)
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.green.shade600, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle,
+                        size: 13, color: Colors.green.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${"exactMatch".tr}: $exactCode',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (product.alinti.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: RichText(
+                  text: widget.highlightBuilder(
+                    context,
+                    product.alinti,
+                    widget.query,
+                    TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              )
+            else if (product.aciklama.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: RichText(
+                  text: widget.highlightBuilder(
+                    context,
+                    product.aciklama,
+                    widget.query,
+                    TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+            if (!isExact && _matchReason(product, widget.query).isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _matchReason(product, widget.query),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

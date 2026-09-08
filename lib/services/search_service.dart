@@ -20,34 +20,46 @@ class SearchService {
             .map((productMap) => Product.fromJson(productMap))
             .toList();
 
-        final lower = query.toLowerCase();
+        final lower = query.trim().toLowerCase();
+        final normLower = lower.replaceAll(RegExp(r'[\s\-_./]'), '');
 
         bool contains(String? text) =>
             text?.toLowerCase().contains(lower) ?? false;
 
-        bool stockMatch(Product p) => p.malzemeler?.any(
+        bool exactStockMatch(Product p) =>
+            p.malzemeler?.any((m) {
+              final code = m.stokKodu.trim().toLowerCase();
+              return code == lower ||
+                  (normLower.isNotEmpty &&
+                      code.replaceAll(RegExp(r'[\s\-_./]'), '') == normLower);
+            }) ??
+            false;
+
+        bool stockMatch(Product p) =>
+            p.malzemeler?.any(
                 (m) => m.stokKodu.toLowerCase().contains(lower)) ??
             false;
 
         bool nameMatch(Product p) =>
             contains(p.ad) || contains(p.alinti) || contains(p.aciklama);
 
-        products =
-            products.where((p) => nameMatch(p) || stockMatch(p)).toList();
+        products = products
+            .where((p) => nameMatch(p) || stockMatch(p) || exactStockMatch(p))
+            .toList();
 
         int score(Product p) {
+          if (exactStockMatch(p)) return -10;
+          if (p.ad.trim().toLowerCase() == lower) return -5;
+
           int s = 3;
-          if (nameMatch(p)) {
-            if (contains(p.ad)) {
-              s = 0;
-            } else if (contains(p.alinti)) {
-              s = 1;
-            } else if (contains(p.aciklama)) {
-              s = 2;
-            }
-          }
           if (stockMatch(p)) {
-            s = s < 0 ? s : 0;
+            s = 0;
+          } else if (contains(p.ad)) {
+            s = 1;
+          } else if (contains(p.alinti)) {
+            s = 2;
+          } else if (contains(p.aciklama)) {
+            s = 3;
           }
           return s;
         }
