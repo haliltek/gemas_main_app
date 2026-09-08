@@ -29,7 +29,9 @@ class SubePage extends StatelessWidget {
                   SizedBox(height: 20),
                   Text(sube.adres),
                   SizedBox(height: 20),
-                  Text(sube.tlf + ' - ' + sube.tlf),
+                  Text(sube.tlf2.isNotEmpty && sube.tlf2 != sube.tlf
+                      ? '${sube.tlf} - ${sube.tlf2}'
+                      : sube.tlf),
                   SizedBox(height: 30),
                   Text("ÇALIŞMA SAATLERİMİZ", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   SizedBox(height: 10),

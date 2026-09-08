@@ -36,7 +36,7 @@ class _DrawerMenuState extends State<DrawerMenu> {
       _corporateFuture = _getCorporateList();
     }
 
-    if (_cachedOffices != null) {
+    if (_cachedOffices != null && _cachedLang == lang) {
       _officeFuture = Future.value(_cachedOffices!);
     } else {
       _officeFuture = _getOfficeList();
@@ -65,9 +65,10 @@ class _DrawerMenuState extends State<DrawerMenu> {
   }
 
   Future<List<Sube>> _getOfficeList() async {
+    final lang = "langCode".tr;
     try {
       final response = await http
-          .get(Uri.parse("${Constants.BASE_API_URL}tr/subeler"))
+          .get(Uri.parse("${Constants.BASE_API_URL}$lang/subeler"))
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final list = (json.decode(response.body) as List)
@@ -78,7 +79,8 @@ class _DrawerMenuState extends State<DrawerMenu> {
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint("DrawerMenu _getOfficeList error: $e");
       return _cachedOffices ?? [];
     }
   }

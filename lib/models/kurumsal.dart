@@ -24,10 +24,10 @@ class Corporate {
   String icerik;
 
   factory Corporate.fromJson(Map<String, dynamic> json) => Corporate(
-        id: json["id"],
-        image: json["image"],
-        ad: json["ad"],
-        icerik: json["icerik"],
+        id: json["id"] is int ? json["id"] : (int.tryParse(json["id"]?.toString() ?? '0') ?? 0),
+        image: json["image"]?.toString() ?? '',
+        ad: json["ad"]?.toString() ?? '',
+        icerik: json["icerik"]?.toString() ?? '',
       );
 
   Map<String, dynamic> toJson() => {
