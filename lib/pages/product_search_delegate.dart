@@ -76,17 +76,6 @@ class ProductSearchDelegate extends SearchDelegate<Product?> {
     return TextSpan(children: spans);
   }
 
-  String _matchReason(Product product, String q) {
-    final lower = q.toLowerCase();
-    bool contains(String? t) => t?.toLowerCase().contains(lower) ?? false;
-    if (contains(product.ad)) return 'matchName'.tr;
-    if (contains(product.alinti)) return 'matchSummary'.tr;
-    if (contains(product.aciklama)) return 'matchDescription'.tr;
-    if (product.malzemeler?.any((m) => contains(m.stokKodu)) ?? false) {
-      return 'matchStock'.tr;
-    }
-    return '';
-  }
 
   @override
   void close(BuildContext context, Product? result) {
@@ -314,18 +303,18 @@ class SearchResultsList extends StatefulWidget {
 class _SearchResultsListState extends State<SearchResultsList> {
   bool _isRelatedExpanded = false;
 
-  static String _normalize(String s) =>
-      s.replaceAll(RegExp(r'[\s\-_./]'), '').toLowerCase();
+  static String _normalize(String? s) => SearchService.normalizeText(s);
 
   static String? _getExactMatchedStockCode(Product product, String q) {
     final cleanQ = q.trim().toLowerCase();
-    final normQ = _normalize(cleanQ);
-    if (normQ.isEmpty) return null;
+    final normCode = cleanQ.replaceAll(RegExp(r'[\s\-_./]'), '');
+    if (cleanQ.isEmpty) return null;
 
     if (product.malzemeler != null) {
       for (var m in product.malzemeler!) {
         final code = m.stokKodu.trim().toLowerCase();
-        if (code == cleanQ || (normQ.length >= 3 && _normalize(code) == normQ)) {
+        final normM = code.replaceAll(RegExp(r'[\s\-_./]'), '');
+        if (code == cleanQ || (normCode.length >= 3 && normM == normCode)) {
           return m.stokKodu;
         }
       }
@@ -333,26 +322,21 @@ class _SearchResultsListState extends State<SearchResultsList> {
     return null;
   }
 
-  static bool _isExactMatch(Product product, String q) {
-    final cleanQ = q.trim().toLowerCase();
-    final normQ = _normalize(cleanQ);
+  static bool _titleMatches(Product product, String q) {
+    final normQ = _normalize(q);
     if (normQ.isEmpty) return false;
-
-    // 1. Check exact stock code match
-    if (_getExactMatchedStockCode(product, q) != null) return true;
-
-    // 2. Check exact product name match
     final normAd = _normalize(product.ad);
-    if (product.ad.trim().toLowerCase() == cleanQ ||
-        (normQ.length >= 3 && normAd == normQ)) {
+    if (normAd.contains(normQ)) return true;
+    final words = normQ.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.length > 1 && words.every((w) => normAd.contains(w))) {
       return true;
     }
     return false;
   }
 
   String _matchReason(Product product, String q) {
-    final lower = q.toLowerCase();
-    bool contains(String? t) => t?.toLowerCase().contains(lower) ?? false;
+    final normQ = _normalize(q);
+    bool contains(String? t) => _normalize(t).contains(normQ);
     final exactCode = _getExactMatchedStockCode(product, q);
     if (exactCode != null) {
       return '${"exactMatch".tr}: $exactCode';
@@ -374,32 +358,43 @@ class _SearchResultsListState extends State<SearchResultsList> {
 
     final query = widget.query.trim();
 
-    final exactMatches = <Product>[];
-    final relatedMatches = <Product>[];
+    // Check if ANY product has an exact stock code match
+    final bool hasCodeMatch =
+        widget.products.any((p) => _getExactMatchedStockCode(p, query) != null);
 
-    for (final p in widget.products) {
-      if (_isExactMatch(p, query)) {
-        exactMatches.add(p);
+    final List<Product> primaryMatches;
+    final List<Product> relatedMatches;
+    final bool isCodeSearch;
+
+    if (hasCodeMatch) {
+      // CODE SEARCH MODE:
+      // Primary: Products whose stock code matches exactly
+      // Related: Other products containing this code in parts/sub-models
+      isCodeSearch = true;
+      primaryMatches = widget.products
+          .where((p) => _getExactMatchedStockCode(p, query) != null)
+          .toList();
+      relatedMatches = widget.products
+          .where((p) => _getExactMatchedStockCode(p, query) == null)
+          .toList();
+    } else {
+      // NAME / KEYWORD SEARCH MODE:
+      isCodeSearch = false;
+      final titleList =
+          widget.products.where((p) => _titleMatches(p, query)).toList();
+      if (titleList.isNotEmpty) {
+        // Products whose title explicitly contains the search term(s)
+        primaryMatches = titleList;
+        relatedMatches =
+            widget.products.where((p) => !_titleMatches(p, query)).toList();
       } else {
-        relatedMatches.add(p);
+        // Fallback: If no product has it in title, show all results directly so nothing is hidden
+        primaryMatches = widget.products;
+        relatedMatches = [];
       }
     }
 
-    final bool hasExactMatch = exactMatches.isNotEmpty;
-
-    if (hasExactMatch && relatedMatches.isNotEmpty) {
-      final cleanQ = query.toLowerCase();
-      relatedMatches.sort((a, b) {
-        final aHasStock = a.malzemeler
-                ?.any((m) => m.stokKodu.toLowerCase().contains(cleanQ)) ??
-            false;
-        final bHasStock = b.malzemeler
-                ?.any((m) => m.stokKodu.toLowerCase().contains(cleanQ)) ??
-            false;
-        if (aHasStock != bHasStock) return aHasStock ? -1 : 1;
-        return 0;
-      });
-    }
+    final theme = Theme.of(context);
 
     return ListView(
       padding: EdgeInsets.only(
@@ -407,76 +402,92 @@ class _SearchResultsListState extends State<SearchResultsList> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       children: [
-        if (hasExactMatch) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    size: 18, color: Colors.green.shade700),
-                const SizedBox(width: 6),
-                Text(
-                  'exactMatch'.tr.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
-                    color: Colors.green.shade800,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${exactMatches.length} ürün',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ...exactMatches.map(
-              (product) => _buildProductCard(context, product, isExact: true)),
-          if (relatedMatches.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _buildRelatedButton(context, relatedMatches.length),
-            if (_isRelatedExpanded) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.alt_route,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Text(
-                      'relatedProductsHeader'.tr,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.secondary,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                isCodeSearch ? Icons.check_circle : Icons.search,
+                size: 18,
+                color: isCodeSearch
+                    ? Colors.green.shade700
+                    : theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                (isCodeSearch ? 'exactMatch'.tr : 'productResults'.tr)
+                    .toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                  color: isCodeSearch
+                      ? Colors.green.shade800
+                      : theme.colorScheme.primary,
                 ),
               ),
-              ...relatedMatches.map((product) =>
-                  _buildProductCard(context, product, isExact: false)),
+              const Spacer(),
+              Text(
+                '${primaryMatches.length} ${"products".tr.toLowerCase()}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
             ],
+          ),
+        ),
+        ...primaryMatches.map(
+          (product) => _buildProductCard(
+            context,
+            product,
+            isExactCode: isCodeSearch,
+          ),
+        ),
+        if (relatedMatches.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildRelatedButton(
+            context,
+            relatedMatches.length,
+            isCodeSearch: isCodeSearch,
+          ),
+          if (_isRelatedExpanded) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.alt_route,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.secondary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'relatedProductsHeader'.tr,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.secondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...relatedMatches.map((product) =>
+                _buildProductCard(context, product, isExactCode: false)),
           ],
-        ] else ...[
-          ...widget.products.map(
-              (product) => _buildProductCard(context, product, isExact: false)),
         ],
       ],
     );
   }
 
-  Widget _buildRelatedButton(BuildContext context, int count) {
+  Widget _buildRelatedButton(BuildContext context, int count,
+      {required bool isCodeSearch}) {
     final theme = Theme.of(context);
+    final subtitle = isCodeSearch
+        ? 'relatedProductsSubtitle'.tr
+        : 'relatedDescSubtitle'.tr;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12.0),
       child: Material(
@@ -529,7 +540,7 @@ class _SearchResultsListState extends State<SearchResultsList> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'relatedProductsSubtitle'.tr,
+                        subtitle,
                         style: TextStyle(
                           fontSize: 11,
                           color: theme.colorScheme.onSurfaceVariant,
@@ -552,17 +563,21 @@ class _SearchResultsListState extends State<SearchResultsList> {
     );
   }
 
-  Widget _buildProductCard(BuildContext context, Product product,
-      {required bool isExact}) {
-    final exactCode = _getExactMatchedStockCode(product, widget.query);
+  Widget _buildProductCard(
+    BuildContext context,
+    Product product, {
+    required bool isExactCode,
+  }) {
+    final exactCode =
+        isExactCode ? _getExactMatchedStockCode(product, widget.query) : null;
     final theme = Theme.of(context);
 
     return Card(
-      elevation: isExact ? 2.5 : 1.0,
+      elevation: isExactCode ? 2.5 : 1.0,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: isExact
+        side: isExactCode
             ? BorderSide(color: Colors.green.shade500, width: 1.5)
             : BorderSide(color: Colors.grey.shade200, width: 0.8),
       ),
@@ -600,7 +615,7 @@ class _SearchResultsListState extends State<SearchResultsList> {
                 TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: isExact
+                  color: isExactCode
                       ? Colors.green.shade900
                       : theme.colorScheme.primary,
                 ),
@@ -663,7 +678,8 @@ class _SearchResultsListState extends State<SearchResultsList> {
                   ),
                 ),
               ),
-            if (!isExact && _matchReason(product, widget.query).isNotEmpty)
+            if (!isExactCode &&
+                _matchReason(product, widget.query).isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(

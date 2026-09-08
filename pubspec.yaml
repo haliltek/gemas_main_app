@@ -3,7 +3,7 @@ description: Gemaş mobile application
 
 publish_to: 'none'
 
-version: 0.4.126+56
+version: 0.4.127+57
 
 environment:
   sdk: ">=3.0.6 <4.0.0"
