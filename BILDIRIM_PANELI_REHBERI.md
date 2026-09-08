@@ -355,3 +355,72 @@ Yönetim panelinize ekleyeceğiniz bildirim formu şu alanlardan oluşmalıdır:
 3. **Bildirim İçeriği (Textarea, Zorunlu):** Maksimum 150-200 karakter.
 4. **Yönlendirilecek Ürün (Stok Kodu) (Input, Opsiyonel):** Kullanıcı tıkladığında doğrudan açılmasını istediğiniz ürünün stok kodu. Boş bırakılırsa ana sayfa açılır.
 5. **Gönder Butonu:** Form gönderildiğinde yukarıdaki API isteğini tetikler ve dönen yanıt kodunu panelde kullanıcıya gösterir.
+
+---
+
+## 8. Logo ERP Portalı "Fiyat Güncelleme Onayı" Entegrasyonu
+
+Gemaş Logo ERP Portalında yer alan **"🎯 Fiyat Güncelleme Onayı"** modalına, mail bildirimi yanına bir mobil bildirim kutucuğu ekleyerek tek tıkla sahadaki tüm mobil kullanıcılara fiyat değişikliği bildirimi gönderebilirsiniz.
+
+### 8.1. Modal HTML Tasarımı
+
+Mevcut mail checkbox'ının altına varsayılan olarak **işaretsiz (unchecked)** olacak şekilde şu kutucuk eklenir:
+
+```html
+<!-- Mevcut Mail Bildirimi Kutucuğu -->
+<div class="form-check mb-2">
+  <input class="form-check-input" type="checkbox" id="sendMailNotification" checked>
+  <label class="form-check-label" for="sendMailNotification">
+    ✉️ Fiyat değişikliğini mail ile bildir
+  </label>
+</div>
+
+<!-- YENİ: Mobil Uygulama Bildirimi Kutucuğu (Default Seçili Değil) -->
+<div class="form-check mb-3">
+  <input class="form-check-input" type="checkbox" id="sendMobilePushNotification">
+  <label class="form-check-label" for="sendMobilePushNotification" style="font-weight: 500; color: #1e293b;">
+    📱 Mobil uygulama bildirimi gönder (Tüm Kullanıcılara)
+  </label>
+</div>
+```
+
+### 8.2. "Tüm Platformlarda Güncelle" Butonu Tıklandığında Tetiklenecek İstek
+
+Kullanıcı `sendMobilePushNotification` kutucuğunu işaretleyip **"Tüm Platformlarda Güncelle"** butonuna bastığında, veritabanı ve web sitesi güncellendikten sonra arka planda Firebase HTTP v1 API'ye şu JSON gönderilir:
+
+#### Örnek Gönderilecek Payload:
+```json
+{
+  "message": {
+    "topic": "allUsers",
+    "notification": {
+      "title": "Fiyat Güncellemesi: 06446",
+      "body": "Tuz Klor Puritron Jeneratör (06446) ürünümüzün liste fiyatı güncellendi. Yeni fiyatı incelemek için tıklayın."
+    },
+    "data": {
+      "stockCode": "06446"
+    },
+    "android": {
+      "priority": "high",
+      "notification": {
+        "channel_id": "gemas_high_importance_channel",
+        "sound": "default"
+      }
+    },
+    "apns": {
+      "payload": {
+        "aps": {
+          "sound": "default",
+          "badge": 1
+        }
+      }
+    }
+  }
+}
+```
+
+### 8.3. Mobil Uygulamanın Davranışı
+- **Tıklama:** Sahadaki satış temsilcisi, bayi veya müşteri bu bildirime dokunduğu anda uygulama açılır.
+- **Derin Bağlantı (Deep Link):** `data.stockCode` değeri (`06446`) sayesinde uygulama doğrudan ilgili ürünün detay sayfasını (`ProductPage`) açar ve güncel Euro/TL fiyatını ekrana getirir.
+- **Güvenlik / Kontrol:** Kutucuk varsayılan olarak **işaretsiz** olduğu için, yöneticinin her küçük fiyat düzenlemesinde yanlışlıkla bildirim basması engellenmiş olur; yalnızca duyurulması istenen stratejik fiyat değişimlerinde işaretlenir.
+
