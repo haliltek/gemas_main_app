@@ -46,6 +46,7 @@ Padding buildNews(BuildContext context, List<Duyuru> newsList) {
                     fit: BoxFit.cover,
                     width: responsive.wp(95.0),
                     height: responsive.hp(100),
+                    memCacheWidth: 800,
                   ),
                 ),
               );

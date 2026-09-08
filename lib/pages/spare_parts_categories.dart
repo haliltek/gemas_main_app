@@ -16,32 +16,44 @@ class SparePartsCategories extends StatefulWidget {
 }
 
 class _SparePartsCategoriesState extends State<SparePartsCategories> {
+  static List<SparePartCategory>? _cachedSpareParts;
+  static String? _cachedLang;
+
   late Future<List<SparePartCategory>> _sparePartsFuture;
 
   @override
   void initState() {
     super.initState();
-    _sparePartsFuture = _getSpareParts();
+    final lang = "langCode".tr;
+    if (_cachedSpareParts != null && _cachedLang == lang) {
+      _sparePartsFuture = Future.value(_cachedSpareParts!);
+    } else {
+      _sparePartsFuture = _getSpareParts();
+    }
   }
 
   Future<List<SparePartCategory>> _getSpareParts({int retryCount = 0}) async {
+    final lang = "langCode".tr;
     try {
       final response = await http
-          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/spare_part_categories"))
-          .timeout(const Duration(seconds: 15));
+          .get(Uri.parse("https://gemas.com.tr/api/v1/$lang/spare_part_categories"))
+          .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List)
+        final list = (json.decode(response.body) as List)
             .map((sparePartCategoryMap) => SparePartCategory.fromJson(sparePartCategoryMap))
             .toList();
+        _cachedSpareParts = list;
+        _cachedLang = lang;
+        return list;
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
     } catch (error) {
-      if (retryCount < 2) {
-        await Future.delayed(const Duration(seconds: 3));
+      if (retryCount < 1) {
+        await Future.delayed(const Duration(seconds: 2));
         return _getSpareParts(retryCount: retryCount + 1);
       }
-      return [];
+      return _cachedSpareParts ?? [];
     }
   }
 
@@ -108,6 +120,7 @@ class _SparePartsCategoriesState extends State<SparePartsCategories> {
                           ? CachedNetworkImage(
                               imageUrl: Constants.DOMAIN + category.image,
                               fit: BoxFit.contain,
+                              memCacheWidth: 250,
                               placeholder: (context, url) => const Center(
                                 child: SizedBox(
                                   width: 20,

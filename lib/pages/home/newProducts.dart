@@ -50,6 +50,7 @@ SizedBox buildNewProducts(BuildContext context, List<Product> newProducts) {
                               imageUrl: Constants.DOMAIN + urun.urunFoto!.first.foto,
                               fit: BoxFit.cover,
                               width: double.infinity,
+                              memCacheWidth: 600,
                               errorWidget: (context, url, error) => Image.asset(
                                 'assets/images/unnamed.png',
                                 width: double.infinity,

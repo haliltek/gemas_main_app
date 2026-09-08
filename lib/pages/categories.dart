@@ -17,32 +17,44 @@ class CategoriesPage extends StatefulWidget {
 }
 
 class _CategoriesPageState extends State<CategoriesPage> {
+  static List<Category>? _cachedCategories;
+  static String? _cachedLang;
+
   late Future<List<Category>> _categoriesFuture;
 
   @override
   void initState() {
     super.initState();
-    _categoriesFuture = _getCategoryList();
+    final lang = "langCode".tr;
+    if (_cachedCategories != null && _cachedLang == lang) {
+      _categoriesFuture = Future.value(_cachedCategories!);
+    } else {
+      _categoriesFuture = _getCategoryList();
+    }
   }
 
   Future<List<Category>> _getCategoryList({int retryCount = 0}) async {
+    final lang = "langCode".tr;
     try {
       final response = await http
-          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/categoriesV2"))
-          .timeout(const Duration(seconds: 15));
+          .get(Uri.parse("https://gemas.com.tr/api/v1/$lang/categoriesV2"))
+          .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List)
+        final list = (json.decode(response.body) as List)
             .map((categoryMap) => Category.fromJson(categoryMap))
             .toList();
+        _cachedCategories = list;
+        _cachedLang = lang;
+        return list;
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
     } catch (e) {
-      if (retryCount < 2) {
-        await Future.delayed(const Duration(seconds: 3));
+      if (retryCount < 1) {
+        await Future.delayed(const Duration(seconds: 2));
         return _getCategoryList(retryCount: retryCount + 1);
       }
-      return [];
+      return _cachedCategories ?? [];
     }
   }
 
@@ -106,6 +118,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                           ? CachedNetworkImage(
                               imageUrl: Constants.DOMAIN + category.image,
                               fit: BoxFit.contain,
+                              memCacheWidth: 250,
                               placeholder: (context, url) => const Center(
                                 child: SizedBox(
                                   width: 20,

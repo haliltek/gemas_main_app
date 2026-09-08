@@ -164,11 +164,18 @@ class ProductSearchDelegate extends SearchDelegate<Product?> {
 
   void _search(String value) async {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      _currentResults = [];
+      _isLoading = false;
+      if (!_resultsController.isClosed) _resultsController.add([]);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
       if (_resultsController.isClosed) return;
       _isLoading = true;
       _resultsController.add(_currentResults);
-      final products = await SearchService.searchProducts(value);
+      final products = await SearchService.searchProducts(trimmed);
       if (_resultsController.isClosed) return;
       _currentResults = products;
       _isLoading = false;

@@ -17,6 +17,7 @@ import 'package:gemas/pages/product_search_delegate.dart';
 import 'package:gemas/utils/responsive.dart';
 import 'package:gemas/widgets/drawer.dart';
 import 'package:gemas/widgets/gemas_app_bar.dart';
+import 'package:gemas/services/search_service.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
@@ -26,6 +27,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static List<Product>? _cachedNewProducts;
+  static List<Category>? _cachedCategories;
+  static List<Duyuru>? _cachedNews;
+  static String? _cachedLocale;
 
   late Future<List<Product>> _newProductsFuture;
   late Future<List<Category>> _categoryListFuture;
@@ -37,84 +42,125 @@ class _HomePageState extends State<HomePage> {
     fetchData();
   }
 
-  Future<void> fetchData() async {
+  Future<void> fetchData({bool forceRefresh = false}) async {
+    final currentLang = "langCode".tr;
+
+    // Fast path: Render instantly in 0ms from cache
+    if (!forceRefresh &&
+        _cachedLocale == currentLang &&
+        _cachedNewProducts != null &&
+        _cachedCategories != null &&
+        _cachedNews != null) {
+      setState(() {
+        _newProductsFuture = Future.value(_cachedNewProducts!);
+        _categoryListFuture = Future.value(_cachedCategories!);
+        _newsListFuture = Future.value(_cachedNews!);
+      });
+      // Revalidate in background without showing blocking spinner
+      _refreshInBackground();
+      return;
+    }
+
     setState(() {
       _newProductsFuture = _getNewProducts();
       _categoryListFuture = _getCategoryList();
       _newsListFuture = _getNewsList();
+      _cachedLocale = currentLang;
     });
   }
 
-  Future<List<Product>> _getNewProducts({int retryCount = 0}) async {
+  Future<void> _refreshInBackground() async {
+    try {
+      final newProd = await _getNewProducts(silent: true);
+      final newCat = await _getCategoryList(silent: true);
+      final newNews = await _getNewsList(silent: true);
+
+      if (mounted && (newProd.isNotEmpty || newCat.isNotEmpty || newNews.isNotEmpty)) {
+        setState(() {
+          if (newProd.isNotEmpty) _newProductsFuture = Future.value(_cachedNewProducts = newProd);
+          if (newCat.isNotEmpty) _categoryListFuture = Future.value(_cachedCategories = newCat);
+          if (newNews.isNotEmpty) _newsListFuture = Future.value(_cachedNews = newNews);
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<List<Product>> _getNewProducts({int retryCount = 0, bool silent = false}) async {
     try {
       var url = Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/productsByCategoryV2/1");
-      var response = await http.get(url).timeout(const Duration(seconds: 15));
+      var response = await http.get(url).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List).map((newProductMap) => Product.fromJson(newProductMap)).toList();
-      } else {
+        final list = (json.decode(response.body) as List).map((newProductMap) => Product.fromJson(newProductMap)).toList();
+        _cachedNewProducts = list;
+        return list;
+      } else if (!silent) {
         handleError(response.statusCode);
       }
     } catch (e) {
-      if (retryCount >= 2) {
+      if (retryCount >= 2 && !silent) {
         handleError(-1);
       }
     }
 
     if (retryCount < 2) {
-      await Future.delayed(const Duration(seconds: 3));
-      return _getNewProducts(retryCount: retryCount + 1);
+      await Future.delayed(const Duration(seconds: 2));
+      return _getNewProducts(retryCount: retryCount + 1, silent: silent);
     }
-    return [];
+    return _cachedNewProducts ?? [];
   }
 
-  Future<List<Category>> _getCategoryList({int retryCount = 0}) async {
+  Future<List<Category>> _getCategoryList({int retryCount = 0, bool silent = false}) async {
     try {
       var response = await http
           .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/categoriesV2"))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List).map((categoryMap) => Category.fromJson(categoryMap)).toList();
-      } else {
+        final list = (json.decode(response.body) as List).map((categoryMap) => Category.fromJson(categoryMap)).toList();
+        _cachedCategories = list;
+        return list;
+      } else if (!silent) {
         handleError(response.statusCode);
       }
     } catch (e) {
-      if (retryCount >= 2) {
+      if (retryCount >= 2 && !silent) {
         handleError(-1);
       }
     }
 
     if (retryCount < 2) {
-      await Future.delayed(const Duration(seconds: 3));
-      return _getCategoryList(retryCount: retryCount + 1);
+      await Future.delayed(const Duration(seconds: 2));
+      return _getCategoryList(retryCount: retryCount + 1, silent: silent);
     }
-    return [];
+    return _cachedCategories ?? [];
   }
 
-  Future<List<Duyuru>> _getNewsList({int retryCount = 0}) async {
+  Future<List<Duyuru>> _getNewsList({int retryCount = 0, bool silent = false}) async {
     try {
       var langCode = Get.locale?.languageCode ?? "tr";
       var response = await http
           .get(Uri.parse("https://gemas.com.tr/api/v1/$langCode/duyurularV2"))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List).map((newsMap) => Duyuru.fromJson(newsMap)).toList();
-      } else {
+        final list = (json.decode(response.body) as List).map((newsMap) => Duyuru.fromJson(newsMap)).toList();
+        _cachedNews = list;
+        return list;
+      } else if (!silent) {
         handleError(response.statusCode);
       }
     } catch (e) {
-      if (retryCount >= 2) {
+      if (retryCount >= 2 && !silent) {
         handleError(-1);
       }
     }
 
     if (retryCount < 2) {
-      await Future.delayed(const Duration(seconds: 3));
-      return _getNewsList(retryCount: retryCount + 1);
+      await Future.delayed(const Duration(seconds: 2));
+      return _getNewsList(retryCount: retryCount + 1, silent: silent);
     }
-    return [];
+    return _cachedNews ?? [];
   }
 
   void _showErrorSnackbar(String message) {
@@ -268,81 +314,83 @@ class _HomePageState extends State<HomePage> {
               } else if (menu == "es") {
                 Get.updateLocale(const Locale('es', 'ES'));
               }
-              fetchData();
+              SearchService.clearCache();
+              fetchData(forceRefresh: true);
             },
           ),
         ],
       ),
       drawer: DrawerMenu(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: ClampingScrollPhysics(),
-          child: Column(
-          children: [
-            buildTopNavbar(context),
-            FutureBuilder<List<Product>>(
-              future: _newProductsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Container(
-                    height: MediaQuery.of(context).size.height * .30,
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                } else if (snapshot.hasError) {
-                  // Error state
-                  return Text('Error: ${snapshot.error}');
-                } else {
-                  return buildNewProducts(context, snapshot.data ?? []);
-                }
-              },
+        child: RefreshIndicator(
+          onRefresh: () => fetchData(forceRefresh: true),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
+            child: Column(
+              children: [
+                buildTopNavbar(context),
+                FutureBuilder<List<Product>>(
+                  future: _newProductsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return SizedBox(
+                        height: MediaQuery.of(context).size.height * .30,
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    } else if (snapshot.hasError) {
+                      return Text('Error: ${snapshot.error}');
+                    } else {
+                      return buildNewProducts(context, snapshot.data ?? []);
+                    }
+                  },
+                ),
+                // Use FutureBuilder for categories
+                FutureBuilder<List<Category>>(
+                  future: _categoryListFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return SizedBox(
+                        height: responsive.hp(5),
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    } else if (snapshot.hasError) {
+                      return Text('Error: ${snapshot.error}');
+                    } else {
+                      return buildCategories(context, snapshot.data ?? []);
+                    }
+                  },
+                ),
+                const SizedBox(height: 5),
+                buildCatalogueBanner(context),
+                buildSparePartsBanner(context),
+                buildDocumentBanner(context),
+                FutureBuilder<List<Duyuru>>(
+                  future: _newsListFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return SizedBox(
+                        height: responsive.hp(50.0),
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    } else if (snapshot.hasError) {
+                      return Text('Error: ${snapshot.error}');
+                    } else {
+                      return buildNews(context, snapshot.data ?? []);
+                    }
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
-            // Use FutureBuilder for categories
-            FutureBuilder<List<Category>>(
-              future: _categoryListFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Container(
-                    height: responsive.hp(5),
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                } else if (snapshot.hasError) {
-                  // Error state
-                  return Text('Error: ${snapshot.error}');
-                } else {
-                  // Data loaded successfully
-                  return buildCategories(context, snapshot.data ?? []);
-                }
-              },
-            ),
-            SizedBox(height: 5),
-            buildCatalogueBanner(context),
-            buildSparePartsBanner(context),
-            buildDocumentBanner(context),
-            FutureBuilder<List<Duyuru>>(
-              future: _newsListFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Container(
-                    height: responsive.hp(50.0),
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                } else if (snapshot.hasError) {
-                  return Text('Error: ${snapshot.error}');
-                } else {
-                  return buildNews(context, snapshot.data ?? []);
-                }
-              },
-            ),
-            SizedBox(height: 20),
-          ],
+          ),
         ),
       ),
-        ));
+    );
   }
 }

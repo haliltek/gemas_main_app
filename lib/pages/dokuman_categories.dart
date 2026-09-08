@@ -15,32 +15,44 @@ class DocumanCategoriesPage extends StatefulWidget {
 }
 
 class _DocumanCategoriesPageState extends State<DocumanCategoriesPage> {
+  static List<DocumanCategory>? _cachedCategories;
+  static String? _cachedLang;
+
   late Future<List<DocumanCategory>> _categoriesFuture;
 
   @override
   void initState() {
     super.initState();
-    _categoriesFuture = _getDocumanCategories();
+    final lang = "langCode".tr;
+    if (_cachedCategories != null && _cachedLang == lang) {
+      _categoriesFuture = Future.value(_cachedCategories!);
+    } else {
+      _categoriesFuture = _getDocumanCategories();
+    }
   }
 
   Future<List<DocumanCategory>> _getDocumanCategories({int retryCount = 0}) async {
+    final lang = "langCode".tr;
     try {
       final response = await http
-          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/dokuman-kategori"))
-          .timeout(const Duration(seconds: 15));
+          .get(Uri.parse("https://gemas.com.tr/api/v1/$lang/dokuman-kategori"))
+          .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List)
+        final list = (json.decode(response.body) as List)
             .map((documanCategoryMap) => DocumanCategory.fromJson(documanCategoryMap))
             .toList();
+        _cachedCategories = list;
+        _cachedLang = lang;
+        return list;
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
     } catch (e) {
-      if (retryCount < 2) {
-        await Future.delayed(const Duration(seconds: 3));
+      if (retryCount < 1) {
+        await Future.delayed(const Duration(seconds: 2));
         return _getDocumanCategories(retryCount: retryCount + 1);
       }
-      return [];
+      return _cachedCategories ?? [];
     }
   }
 

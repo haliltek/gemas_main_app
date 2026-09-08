@@ -113,6 +113,7 @@ class _CategoryPageState extends State<CategoryPage> {
                         ? CachedNetworkImage(
                             imageUrl: Constants.DOMAIN + photos.first.foto,
                             fit: BoxFit.cover,
+                            memCacheWidth: 400,
                             placeholder: (context, url) => Container(
                               color: Colors.grey.shade100,
                               child: const Center(

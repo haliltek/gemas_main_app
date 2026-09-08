@@ -19,30 +19,48 @@ class DrawerMenu extends StatefulWidget {
 }
 
 class _DrawerMenuState extends State<DrawerMenu> {
+  static List<Corporate>? _cachedCorporate;
+  static List<Sube>? _cachedOffices;
+  static String? _cachedLang;
+
   late Future<List<Corporate>> _corporateFuture;
   late Future<List<Sube>> _officeFuture;
 
   @override
   void initState() {
     super.initState();
-    _corporateFuture = _getCorporateList();
-    _officeFuture = _getOfficeList();
+    final lang = "langCode".tr;
+    if (_cachedCorporate != null && _cachedLang == lang) {
+      _corporateFuture = Future.value(_cachedCorporate!);
+    } else {
+      _corporateFuture = _getCorporateList();
+    }
+
+    if (_cachedOffices != null) {
+      _officeFuture = Future.value(_cachedOffices!);
+    } else {
+      _officeFuture = _getOfficeList();
+    }
   }
 
   Future<List<Corporate>> _getCorporateList() async {
+    final lang = "langCode".tr;
     try {
       final response = await http
-          .get(Uri.parse("${Constants.BASE_API_URL}${"langCode".tr}/corporate"))
-          .timeout(const Duration(seconds: 15));
+          .get(Uri.parse("${Constants.BASE_API_URL}$lang/corporate"))
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List)
+        final list = (json.decode(response.body) as List)
             .map((corporateMap) => Corporate.fromJson(corporateMap))
             .toList();
+        _cachedCorporate = list;
+        _cachedLang = lang;
+        return list;
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
     } catch (_) {
-      return [];
+      return _cachedCorporate ?? [];
     }
   }
 
@@ -50,16 +68,18 @@ class _DrawerMenuState extends State<DrawerMenu> {
     try {
       final response = await http
           .get(Uri.parse("${Constants.BASE_API_URL}tr/subeler"))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
-        return (json.decode(response.body) as List)
+        final list = (json.decode(response.body) as List)
             .map((officeMap) => Sube.fromJson(officeMap))
             .toList();
+        _cachedOffices = list;
+        return list;
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
     } catch (_) {
-      return [];
+      return _cachedOffices ?? [];
     }
   }
 

@@ -14,7 +14,13 @@ String removeAllHtmlTags(String htmlText) {
   return htmlText.replaceAll(exp, '');
 }
 
+final Map<String, String> _pdfCatalogueCache = {};
+
 Future<String> getPdfCatalogue(String locale) async {
+  if (_pdfCatalogueCache.containsKey(locale)) {
+    return _pdfCatalogueCache[locale]!;
+  }
+
   String lang;
 
   switch (locale) {
@@ -38,15 +44,19 @@ Future<String> getPdfCatalogue(String locale) async {
   }
 
   String pdfUrl = "https://gemas.com.tr/download/app_catalogue/$lang/gemas_current_${lang}_catalogue.pdf";
+  const defaultUrl = "https://gemas.com.tr/download/app_catalogue/en/gemas_current_en_catalogue.pdf";
 
   try {
-    final response = await http.head(Uri.parse(pdfUrl));
+    final response = await http.head(Uri.parse(pdfUrl)).timeout(const Duration(seconds: 3));
     if (response.statusCode == 200) {
+      _pdfCatalogueCache[locale] = pdfUrl;
       return pdfUrl;
     } else {
-      return "https://gemas.com.tr/download/app_catalogue/en/gemas_current_en_catalogue.pdf";
+      _pdfCatalogueCache[locale] = defaultUrl;
+      return defaultUrl;
     }
   } catch (e) {
-    return "https://gemas.com.tr/download/app_catalogue/en/gemas_current_en_catalogue.pdf";
+    _pdfCatalogueCache[locale] = defaultUrl;
+    return defaultUrl;
   }
 }

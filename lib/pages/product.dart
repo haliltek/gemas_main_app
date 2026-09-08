@@ -43,6 +43,7 @@ class ProductPage extends StatelessWidget {
                           child: CachedNetworkImage(
                             imageUrl: Constants.DOMAIN + photos[index].foto,
                             fit: BoxFit.cover,
+                            memCacheWidth: 800,
                             errorWidget: (context, url, error) =>
                                 Image.asset("assets/images/unnamed.png", fit: BoxFit.cover),
                           ),
