@@ -39,7 +39,7 @@ android {
 
     defaultConfig {
         applicationId "app.gemas"
-        minSdkVersion 23
+        minSdkVersion flutter.minSdkVersion
         targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
