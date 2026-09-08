@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1011766388778",
+    "project_id": "gemascompanyapp-3478b",
+    "storage_bucket": "gemascompanyapp-3478b.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1011766388778:android:72e64d1b8473330c0a3b53",
+        "android_client_info": {
+          "package_name": "app.gemas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJE0lDwcElV9ZKEBSXa4jFbP_6Vd8R8xA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

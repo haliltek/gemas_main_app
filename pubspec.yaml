@@ -1,0 +1,69 @@
+name: gemas
+description: Gemaş mobile application
+
+publish_to: 'none'
+
+version: 0.4.124+54
+
+environment:
+  sdk: ">=3.0.6 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Core
+  intl: ^0.17.0
+  cupertino_icons: ^1.0.4
+  get: ^4.6.5
+  http: ^1.4.0
+
+  # Images & Assets
+  cached_network_image: ^3.2.3
+  flutter_svg: ^2.0.7
+
+  # HTML Rendering
+  flutter_widget_from_html_core: ^0.10.6
+
+  # WebView / PDF
+  webview_flutter: ^4.0.7
+  flutter_cached_pdfview: ^0.4.2
+  flutter_pdfview: ^1.2.7
+
+  # Utilities
+  url_launcher: ^6.1.10
+  permission_handler: ^11.2.0
+  shared_preferences: ^2.3.2
+  upgrader: ^10.0.0
+  workmanager: ^0.7.0
+  flutter_local_notifications: ^17.2.1
+  flutter_swiper_null_safety: ^1.0.2
+
+  # Firebase
+  firebase_core: ^4.0.0
+  firebase_messaging: ^16.0.0
+
+  # Launcher icons
+  flutter_launcher_icons: ^0.13.1
+  win32: ^5.5.0
+
+  path_provider: ^2.1.5
+  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter_icons:
+  ios: true
+  android: true
+  image_path_ios: "assets/launcher/icon.png"
+  image_path_android: "assets/launcher/icon.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/images/flags/
+    - assets/launcher/icon.png
