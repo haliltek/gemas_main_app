@@ -38,43 +38,41 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> fetchData() async {
-    try {
+    setState(() {
       _newProductsFuture = _getNewProducts();
       _categoryListFuture = _getCategoryList();
       _newsListFuture = _getNewsList();
-    } catch (e) {
-      _showErrorSnackbar('Veriler alınamadı. Lütfen tekrar deneyin.');
-    }
-    setState(() {});
+    });
   }
 
-  Future<List<Product>> _getNewProducts() async {
-    var url = Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/productsByCategoryV2/1");
-    var response = await http.get(url);
+  Future<List<Product>> _getNewProducts({int retryCount = 0}) async {
     try {
-      print("[home.dart] _getNewProducts() response.statusCode: ${response.statusCode}");
+      var url = Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/productsByCategoryV2/1");
+      var response = await http.get(url).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         return (json.decode(response.body) as List).map((newProductMap) => Product.fromJson(newProductMap)).toList();
       } else {
-        print("[home.dart] _getNewProducts() response.statusCode: ${response.statusCode}");
-        print("[home.dart] _getNewProducts() response.body: ${response.body}");
         handleError(response.statusCode);
       }
     } catch (e) {
-      print("[home.dart] _getNewProducts() catch response.statusCode: ${response.statusCode}");
-      print("[home.dart] _getNewProducts() catchresponse.body: ${response.body}");
-      handleError(-1);
+      if (retryCount >= 2) {
+        handleError(-1);
+      }
     }
 
-    await Future.delayed(Duration(seconds: 8));
-    return _getNewProducts();
+    if (retryCount < 2) {
+      await Future.delayed(const Duration(seconds: 3));
+      return _getNewProducts(retryCount: retryCount + 1);
+    }
+    return [];
   }
 
-  Future<List<Category>> _getCategoryList() async {
+  Future<List<Category>> _getCategoryList({int retryCount = 0}) async {
     try {
-      var response = await http.get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/categoriesV2"));
-      print("[home.dart] _getCategoryList() response.statusCode: ${response.statusCode}");
+      var response = await http
+          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/categoriesV2"))
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         return (json.decode(response.body) as List).map((categoryMap) => Category.fromJson(categoryMap)).toList();
@@ -82,17 +80,24 @@ class _HomePageState extends State<HomePage> {
         handleError(response.statusCode);
       }
     } catch (e) {
-      handleError(-1);
+      if (retryCount >= 2) {
+        handleError(-1);
+      }
     }
 
-    await Future.delayed(Duration(seconds: 8));
-    return _getCategoryList();
+    if (retryCount < 2) {
+      await Future.delayed(const Duration(seconds: 3));
+      return _getCategoryList(retryCount: retryCount + 1);
+    }
+    return [];
   }
 
-  Future<List<Duyuru>> _getNewsList() async {
+  Future<List<Duyuru>> _getNewsList({int retryCount = 0}) async {
     try {
-      var response = await http.get(Uri.parse("https://gemas.com.tr/api/v1/${Get.locale!.languageCode}/duyurularV2"));
-      print("[home.dart] _getNewsList() response.statusCode: ${response.statusCode}");
+      var langCode = Get.locale?.languageCode ?? "tr";
+      var response = await http
+          .get(Uri.parse("https://gemas.com.tr/api/v1/$langCode/duyurularV2"))
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         return (json.decode(response.body) as List).map((newsMap) => Duyuru.fromJson(newsMap)).toList();
@@ -100,20 +105,27 @@ class _HomePageState extends State<HomePage> {
         handleError(response.statusCode);
       }
     } catch (e) {
-      handleError(-1);
+      if (retryCount >= 2) {
+        handleError(-1);
+      }
     }
 
-    await Future.delayed(Duration(seconds: 8));
-    return _getNewsList();
+    if (retryCount < 2) {
+      await Future.delayed(const Duration(seconds: 3));
+      return _getNewsList(retryCount: retryCount + 1);
+    }
+    return [];
   }
 
   void _showErrorSnackbar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
 
   void handleError(int statusCode) {
+    if (!mounted) return;
     String errorMessageKey;
 
     switch (statusCode) {
@@ -127,14 +139,12 @@ class _HomePageState extends State<HomePage> {
         errorMessageKey = 'textError200';
         break;
       default:
-        print("[home.dart] handleError() statusCode: $statusCode");
         errorMessageKey = 'textErrorOther';
     }
 
     String errorMessage = errorMessageKey.tr;
     _showErrorSnackbar(errorMessage);
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -172,9 +182,7 @@ class _HomePageState extends State<HomePage> {
                       "assets/images/flags/tr.svg",
                       width: responsive.wp(5),
                     ),
-                    SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
                     Text(
                       "Türkçe",
                       style: TextStyle(fontSize: responsive.dp(1.5)),
@@ -190,9 +198,7 @@ class _HomePageState extends State<HomePage> {
                       "assets/images/flags/en.svg",
                       width: responsive.wp(5),
                     ),
-                    SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
                     Text(
                       "English",
                       style: TextStyle(fontSize: responsive.dp(1.5)),
@@ -208,16 +214,14 @@ class _HomePageState extends State<HomePage> {
                       "assets/images/flags/fr.svg",
                       width: responsive.wp(5),
                     ),
-                    SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
                     Text(
                       "Français",
                       style: TextStyle(fontSize: responsive.dp(1.5)),
                     ),
                   ],
                 ),
-                value: "en",
+                value: "fr",
               ),
               PopupMenuItem(
                 child: Row(
@@ -226,9 +230,7 @@ class _HomePageState extends State<HomePage> {
                       "assets/images/flags/ru.svg",
                       width: responsive.wp(5),
                     ),
-                    SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
                     Text(
                       "Russian",
                       style: TextStyle(fontSize: responsive.dp(1.5)),
@@ -241,14 +243,12 @@ class _HomePageState extends State<HomePage> {
                 child: Row(
                   children: [
                     SvgPicture.asset(
-                      "assets/images/flags/en.svg",
+                      "assets/images/flags/es.svg",
                       width: responsive.wp(5),
                     ),
-                    SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
                     Text(
-                      "Espanol",
+                      "Español",
                       style: TextStyle(fontSize: responsive.dp(1.5)),
                     ),
                   ],
@@ -258,15 +258,15 @@ class _HomePageState extends State<HomePage> {
             ],
             onSelected: (String menu) {
               if (menu == "tr") {
-                Get.updateLocale(Locale('tr', 'TR'));
+                Get.updateLocale(const Locale('tr', 'TR'));
               } else if (menu == "en") {
-                Get.updateLocale(Locale('en', 'US'));
+                Get.updateLocale(const Locale('en', 'US'));
               } else if (menu == "fr") {
-                Get.updateLocale(Locale('fr', 'FR'));
+                Get.updateLocale(const Locale('fr', 'FR'));
               } else if (menu == "ru") {
-                Get.updateLocale(Locale('ru', 'RU'));
+                Get.updateLocale(const Locale('ru', 'RU'));
               } else if (menu == "es") {
-                Get.updateLocale(Locale('es', 'ES'));
+                Get.updateLocale(const Locale('es', 'ES'));
               }
               fetchData();
             },

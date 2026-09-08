@@ -12,17 +12,28 @@ import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
 
 class DrawerMenu extends StatefulWidget {
+  const DrawerMenu({Key? key}) : super(key: key);
+
   @override
-  _DrawerMenuState createState() => _DrawerMenuState();
+  State<DrawerMenu> createState() => _DrawerMenuState();
 }
 
 class _DrawerMenuState extends State<DrawerMenu> {
+  late Future<List<Corporate>> _corporateFuture;
+  late Future<List<Sube>> _officeFuture;
+
   @override
-  Widget build(BuildContext context) {
-    Responsive responsive = Responsive(context);
-    Future<List<Corporate>> _getCorporateList() async {
-      var response =
-          await http.get(Uri.parse("${Constants.BASE_API_URL}${"langCode".tr}/corporate"));
+  void initState() {
+    super.initState();
+    _corporateFuture = _getCorporateList();
+    _officeFuture = _getOfficeList();
+  }
+
+  Future<List<Corporate>> _getCorporateList() async {
+    try {
+      final response = await http
+          .get(Uri.parse("${Constants.BASE_API_URL}${"langCode".tr}/corporate"))
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return (json.decode(response.body) as List)
             .map((corporateMap) => Corporate.fromJson(corporateMap))
@@ -30,11 +41,16 @@ class _DrawerMenuState extends State<DrawerMenu> {
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
+    } catch (_) {
+      return [];
     }
+  }
 
-    Future<List<Sube>> _getOfficeList() async {
-      var response =
-          await http.get(Uri.parse("${Constants.BASE_API_URL}tr/subeler"));
+  Future<List<Sube>> _getOfficeList() async {
+    try {
+      final response = await http
+          .get(Uri.parse("${Constants.BASE_API_URL}tr/subeler"))
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return (json.decode(response.body) as List)
             .map((officeMap) => Sube.fromJson(officeMap))
@@ -42,7 +58,14 @@ class _DrawerMenuState extends State<DrawerMenu> {
       } else {
         throw Exception("Bağlantı hatası: ${response.statusCode}");
       }
+    } catch (_) {
+      return [];
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Responsive responsive = Responsive(context);
 
     return SafeArea(
       child: Drawer(
@@ -65,7 +88,10 @@ class _DrawerMenuState extends State<DrawerMenu> {
                   SvgPicture.asset(
                     'assets/images/logo.svg',
                     width: responsive.dp(6),
-                    color: Constants.gemasPrimaryTextColor,
+                    colorFilter: const ColorFilter.mode(
+                      Constants.gemasPrimaryTextColor,
+                      BlendMode.srcIn,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -86,84 +112,106 @@ class _DrawerMenuState extends State<DrawerMenu> {
                 padding: EdgeInsets.zero,
                 children: [
                   ExpansionTile(
-                leading: Icon(Icons.apartment_outlined),
-                title: Text('corporate'.tr),
-                trailing: Icon(Icons.keyboard_arrow_down_rounded),
-                children: <Widget>[
-                  //KURUMSAL
-                  FutureBuilder(
-                      future: _getCorporateList(),
-                      builder: (BuildContext context,
-                          AsyncSnapshot<List<Corporate>> snapshot) {
-                        if (snapshot.hasData) {
+                    leading: const Icon(Icons.apartment_outlined),
+                    title: Text('corporate'.tr),
+                    trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                    children: <Widget>[
+                      FutureBuilder<List<Corporate>>(
+                        future: _corporateFuture,
+                        builder: (BuildContext context, AsyncSnapshot<List<Corporate>> snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            );
+                          }
+                          final list = snapshot.data ?? [];
+                          if (list.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
                           return ListView.builder(
-                              physics: ClampingScrollPhysics(),
-                              shrinkWrap: true,
-                              itemCount: snapshot.data?.length,
-                              itemBuilder: (context, index) {
-                                var kurumsal = snapshot.data![index];
-                                return ListTile(
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => CorporatePage(
-                                          corporate: kurumsal,
-                                        ),
+                            physics: const ClampingScrollPhysics(),
+                            shrinkWrap: true,
+                            itemCount: list.length,
+                            itemBuilder: (context, index) {
+                              var kurumsal = list[index];
+                              return ListTile(
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => CorporatePage(
+                                        corporate: kurumsal,
                                       ),
-                                    );
-                                  },
-                                  leading: Icon(Icons.business_outlined),
-                                  title: Text(kurumsal.ad),
-                                );
-                              });
-                        } else {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                      }),
-                  //KURUMSAL SONU
-                ],
-              ),
+                                    ),
+                                  );
+                                },
+                                leading: const Icon(Icons.business_outlined),
+                                title: Text(kurumsal.ad),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                   ExpansionTile(
-                leading: Icon(Icons.contact_page_outlined),
-                title: Text('contact'.tr),
-                trailing: Icon(Icons.keyboard_arrow_down_rounded),
-                children: <Widget>[
-                  //KURUMSAL
-                  FutureBuilder(
-                      future: _getOfficeList(),
-                      builder: (BuildContext context,
-                          AsyncSnapshot<List<Sube>> snapshot) {
-                        if (snapshot.hasData) {
+                    leading: const Icon(Icons.contact_page_outlined),
+                    title: Text('contact'.tr),
+                    trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                    children: <Widget>[
+                      FutureBuilder<List<Sube>>(
+                        future: _officeFuture,
+                        builder: (BuildContext context, AsyncSnapshot<List<Sube>> snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            );
+                          }
+                          final list = snapshot.data ?? [];
+                          if (list.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
                           return ListView.builder(
-                              physics: ClampingScrollPhysics(),
-                              shrinkWrap: true,
-                              itemCount: snapshot.data?.length,
-                              itemBuilder: (context, index) {
-                                var sube = snapshot.data![index];
-                                return ListTile(
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => SubePage(
-                                          sube: sube,
-                                        ),
+                            physics: const ClampingScrollPhysics(),
+                            shrinkWrap: true,
+                            itemCount: list.length,
+                            itemBuilder: (context, index) {
+                              var sube = list[index];
+                              return ListTile(
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => SubePage(
+                                        sube: sube,
                                       ),
-                                    );
-                                  },
-                                  leading: Icon(Icons.location_on_outlined),
-                                  title: Text(sube.ad),
-                                );
-                              });
-                        } else {
-                          return Center(child: CircularProgressIndicator());
-                        }
-                      }),
-                  //KURUMSAL SONU
-                ],
+                                    ),
+                                  );
+                                },
+                                leading: const Icon(Icons.location_on_outlined),
+                                title: Text(sube.ad),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

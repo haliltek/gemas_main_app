@@ -8,74 +8,132 @@ import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
 import 'package:gemas/widgets/gemas_app_bar.dart';
 
-class SparePartsCategories extends StatelessWidget {
+class SparePartsCategories extends StatefulWidget {
+  const SparePartsCategories({Key? key}) : super(key: key);
+
+  @override
+  State<SparePartsCategories> createState() => _SparePartsCategoriesState();
+}
+
+class _SparePartsCategoriesState extends State<SparePartsCategories> {
+  late Future<List<SparePartCategory>> _sparePartsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _sparePartsFuture = _getSpareParts();
+  }
+
+  Future<List<SparePartCategory>> _getSpareParts({int retryCount = 0}) async {
+    try {
+      final response = await http
+          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/spare_part_categories"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return (json.decode(response.body) as List)
+            .map((sparePartCategoryMap) => SparePartCategory.fromJson(sparePartCategoryMap))
+            .toList();
+      } else {
+        throw Exception("Bağlantı hatası: ${response.statusCode}");
+      }
+    } catch (error) {
+      if (retryCount < 2) {
+        await Future.delayed(const Duration(seconds: 3));
+        return _getSpareParts(retryCount: retryCount + 1);
+      }
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    Future<List<SparePartCategory>> _getSpareParts() async {
-      try {
-        final response = await http.get(
-          Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/spare_part_categories"),
-        );
-        if (response.statusCode == 200) {
-          return (json.decode(response.body) as List)
-              .map((sparePartCategoryMap) => SparePartCategory.fromJson(sparePartCategoryMap))
-              .toList();
-        } else {
-          throw Exception(
-              "ABCD [spare_parts_categories.dart] Bağlantı hatası: ${response.statusCode}");
-        }
-      } catch (error) {
-        await Future.delayed(Duration(seconds: 15));
-        return _getSpareParts();
-      }
-    }
-
     return Scaffold(
       appBar: GemasAppBar(title: 'partCategories'.tr),
-      body: FutureBuilder(
-        future: _getSpareParts(),
+      body: FutureBuilder<List<SparePartCategory>>(
+        future: _sparePartsFuture,
         builder: (BuildContext context, AsyncSnapshot<List<SparePartCategory>> snapshot) {
-          if (snapshot.hasData) {
-            return ListView.builder(
-              physics: ClampingScrollPhysics(),
-              itemCount: snapshot.data?.length,
-              itemBuilder: (context, index) {
-                var category = snapshot.data![index];
-                return InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SparePartByCategoryPage(category: category),
-                      ),
-                    );
-                  },
-                  child: Card(
-                    elevation: 0,
-                    child: ListTile(
-                      leading: Container(
-                        height: 80,
-                        width: 90,
-                        child: category.image != null
-                            ? CachedNetworkImage(
-                                imageUrl: Constants.DOMAIN + category.image, fit: BoxFit.contain)
-                            : Image.asset("assets/images/unnamed.png", fit: BoxFit.fill),
-                      ),
-                      title: Text(
-                        category.ad,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                      ),
-                      trailing: CircleAvatar(
-                        child: Text(category.yedekParcaCount.toString()),
-                      ),
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                  const SizedBox(height: 12),
+                  Text('tryAgain'.tr.isNotEmpty ? 'tryAgain'.tr : 'Tekrar Deneyin'),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _sparePartsFuture = _getSpareParts();
+                      });
+                    },
+                    child: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final data = snapshot.data ?? [];
+          if (data.isEmpty) {
+            return Center(
+              child: Text('noData'.tr.isNotEmpty ? 'noData'.tr : 'Kategori bulunamadı'),
+            );
+          }
+
+          return ListView.builder(
+            physics: const ClampingScrollPhysics(),
+            itemCount: data.length,
+            itemBuilder: (context, index) {
+              var category = data[index];
+              return InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SparePartByCategoryPage(category: category),
+                    ),
+                  );
+                },
+                child: Card(
+                  elevation: 0,
+                  child: ListTile(
+                    leading: SizedBox(
+                      height: 80,
+                      width: 90,
+                      child: (category.image != null && category.image.isNotEmpty)
+                          ? CachedNetworkImage(
+                              imageUrl: Constants.DOMAIN + category.image,
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Image.asset(
+                                "assets/images/unnamed.png",
+                                fit: BoxFit.fill,
+                              ),
+                            )
+                          : Image.asset("assets/images/unnamed.png", fit: BoxFit.fill),
+                    ),
+                    title: Text(
+                      category.ad,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                    ),
+                    trailing: CircleAvatar(
+                      child: Text(category.yedekParcaCount.toString()),
                     ),
                   ),
-                );
-              },
-            );
-          } else {
-            return Center(child: CircularProgressIndicator());
-          }
+                ),
+              );
+            },
+          );
         },
       ),
     );

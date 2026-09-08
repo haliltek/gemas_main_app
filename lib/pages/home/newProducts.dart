@@ -45,7 +45,7 @@ SizedBox buildNewProducts(BuildContext context, List<Product> newProducts) {
                         topLeft: Radius.circular(12),
                         topRight: Radius.circular(12),
                       ),
-                      child: urun.urunFoto!.isNotEmpty
+                      child: (urun.urunFoto != null && urun.urunFoto!.isNotEmpty)
                           ? CachedNetworkImage(
                               imageUrl: Constants.DOMAIN + urun.urunFoto!.first.foto,
                               fit: BoxFit.cover,

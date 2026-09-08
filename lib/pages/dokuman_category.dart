@@ -6,63 +6,111 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:gemas/widgets/gemas_app_bar.dart';
 
-class DocumanCategoryPage extends StatelessWidget {
+class DocumanCategoryPage extends StatefulWidget {
   final int catID;
   final String catName;
 
-  const DocumanCategoryPage({required this.catID, required this.catName}) : super();
+  const DocumanCategoryPage({Key? key, required this.catID, required this.catName}) : super(key: key);
+
+  @override
+  State<DocumanCategoryPage> createState() => _DocumanCategoryPageState();
+}
+
+class _DocumanCategoryPageState extends State<DocumanCategoryPage> {
+  late Future<List<DocumanCategoryDocuman>> _documanFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _documanFuture = _getDocumanCategoryDocuman();
+  }
+
+  Future<List<DocumanCategoryDocuman>> _getDocumanCategoryDocuman({int retryCount = 0}) async {
+    try {
+      final response = await http
+          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/dokumanlar/${widget.catID}"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return (json.decode(response.body) as List)
+            .map((documanCategoryDocumanMap) => DocumanCategoryDocuman.fromJson(documanCategoryDocumanMap))
+            .toList();
+      } else {
+        throw Exception("Bağlantı hatası: ${response.statusCode}");
+      }
+    } catch (e) {
+      if (retryCount < 2) {
+        await Future.delayed(const Duration(seconds: 3));
+        return _getDocumanCategoryDocuman(retryCount: retryCount + 1);
+      }
+      return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    Future<List<DocumanCategoryDocuman>> _getDocumanCategoryDocuman() async {
-      try {
-        var response = await http.get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/dokumanlar/${catID.toString()}"));
-        if (response.statusCode == 200) {
-          return (json.decode(response.body) as List).map((documanCategoryDocumanMap) => DocumanCategoryDocuman.fromJson(documanCategoryDocumanMap)).toList();
-        } else {
-          throw Exception("Bağlantı hatası: ${response.statusCode}");
-        }
-      } catch (e) {
-        await Future.delayed(Duration(seconds: 15));
-        return _getDocumanCategoryDocuman();
-      }
-    }
-
     return Scaffold(
-      appBar: GemasAppBar(title: catName.tr),
-      body: FutureBuilder(
-        future: _getDocumanCategoryDocuman(),
+      appBar: GemasAppBar(title: widget.catName.tr),
+      body: FutureBuilder<List<DocumanCategoryDocuman>>(
+        future: _documanFuture,
         builder: (BuildContext context, AsyncSnapshot<List<DocumanCategoryDocuman>> snapshot) {
-          if (snapshot.hasData) {
-            return ListView.builder(
-              physics: ClampingScrollPhysics(),
-              itemCount: snapshot.data?.length,
-              itemBuilder: (context, index) {
-                var documan = snapshot.data![index];
-                if (documan.urun.ad != null) {
-                  return Card(
-                    elevation: 0,
-                    child: ListTile(
-                      leading: Icon(Icons.picture_as_pdf, color: Colors.red, size: 40),
-                      title: documan.name != null ? Text(documan.name) : Text(''),
-                      subtitle: documan.urun.ad == null ? Text('yok') : Text(documan.urun.ad),
-                      trailing: Icon(Icons.arrow_right),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute<dynamic>(
-                          builder: (_) => PDFViewerCachedFromUrl(url: documan.file, title: documan.name),
-                        ),
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                  const SizedBox(height: 12),
+                  Text('tryAgain'.tr.isNotEmpty ? 'tryAgain'.tr : 'Tekrar Deneyin'),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _documanFuture = _getDocumanCategoryDocuman();
+                      });
+                    },
+                    child: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final data = snapshot.data ?? [];
+          if (data.isEmpty) {
+            return Center(
+              child: Text('noData'.tr.isNotEmpty ? 'noData'.tr : 'Doküman bulunamadı'),
+            );
+          }
+
+          return ListView.builder(
+            physics: const ClampingScrollPhysics(),
+            itemCount: data.length,
+            itemBuilder: (context, index) {
+              var documan = data[index];
+              if (documan.urun.ad != null) {
+                return Card(
+                  elevation: 0,
+                  child: ListTile(
+                    leading: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 40),
+                    title: Text(documan.name),
+                    subtitle: Text(documan.urun.ad.isNotEmpty ? documan.urun.ad : 'yok'),
+                    trailing: const Icon(Icons.arrow_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<dynamic>(
+                        builder: (_) => PDFViewerCachedFromUrl(url: documan.file, title: documan.name),
                       ),
                     ),
-                  );
-                } else {
-                  return null;
-                }
-              },
-            );
-          } else {
-            return Center(child: CircularProgressIndicator());
-          }
+                  ),
+                );
+              } else {
+                return const SizedBox.shrink();
+              }
+            },
+          );
         },
       ),
     );
@@ -70,7 +118,7 @@ class DocumanCategoryPage extends StatelessWidget {
 }
 
 class PDFViewerCachedFromUrl extends StatelessWidget {
-  const PDFViewerCachedFromUrl({required this.url, required this.title}) : super();
+  const PDFViewerCachedFromUrl({Key? key, required this.url, required this.title}) : super(key: key);
 
   final String url;
   final String title;

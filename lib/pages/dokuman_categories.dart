@@ -8,57 +8,101 @@ import 'package:gemas/widgets/gemas_app_bar.dart';
 import 'dokuman_category.dart';
 
 class DocumanCategoriesPage extends StatefulWidget {
+  const DocumanCategoriesPage({Key? key}) : super(key: key);
+
   @override
-  _DocumanCategoriesPageState createState() => _DocumanCategoriesPageState();
+  State<DocumanCategoriesPage> createState() => _DocumanCategoriesPageState();
 }
 
 class _DocumanCategoriesPageState extends State<DocumanCategoriesPage> {
+  late Future<List<DocumanCategory>> _categoriesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoriesFuture = _getDocumanCategories();
+  }
+
+  Future<List<DocumanCategory>> _getDocumanCategories({int retryCount = 0}) async {
+    try {
+      final response = await http
+          .get(Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/dokuman-kategori"))
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return (json.decode(response.body) as List)
+            .map((documanCategoryMap) => DocumanCategory.fromJson(documanCategoryMap))
+            .toList();
+      } else {
+        throw Exception("Bağlantı hatası: ${response.statusCode}");
+      }
+    } catch (e) {
+      if (retryCount < 2) {
+        await Future.delayed(const Duration(seconds: 3));
+        return _getDocumanCategories(retryCount: retryCount + 1);
+      }
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    Future<List<DocumanCategory>> _getDocumanCategories() async {
-      try {
-        var response = await http.get(
-            Uri.parse("https://gemas.com.tr/api/v1/${"langCode".tr}/dokuman-kategori"));
-        if (response.statusCode == 200) {
-          return (json.decode(response.body) as List).map((documanCategoryMap) =>
-              DocumanCategory.fromJson(documanCategoryMap)).toList();
-        } else {
-          throw Exception("Bağlantı hatası: ${response.statusCode}");
-        }
-      } catch (e) {
-        await Future.delayed(Duration(seconds: 15));
-        return _getDocumanCategories();
-      }
-    }
-
     return Scaffold(
       appBar: GemasAppBar(title: "documentCategories".tr),
-      body: FutureBuilder(
-        future: _getDocumanCategories(),
+      body: FutureBuilder<List<DocumanCategory>>(
+        future: _categoriesFuture,
         builder: (BuildContext context, AsyncSnapshot<List<DocumanCategory>> snapshot) {
-          if (snapshot.hasData) {
-            return ListView.builder(
-              itemCount: snapshot.data?.length,
-              itemBuilder: (context, index) {
-                var category = snapshot.data![index];
-                return ListTile(
-                  leading: Icon(Icons.category),
-                  title: Text(snapshot.data![index].ad),
-                  trailing: Icon(Icons.arrow_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DocumanCategoryPage(catID: category.id, catName: category.ad),
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          } else {
-            return Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                  const SizedBox(height: 12),
+                  Text('tryAgain'.tr.isNotEmpty ? 'tryAgain'.tr : 'Tekrar Deneyin'),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _categoriesFuture = _getDocumanCategories();
+                      });
+                    },
+                    child: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final data = snapshot.data ?? [];
+          if (data.isEmpty) {
+            return Center(
+              child: Text('noData'.tr.isNotEmpty ? 'noData'.tr : 'Kategori bulunamadı'),
+            );
+          }
+
+          return ListView.builder(
+            physics: const ClampingScrollPhysics(),
+            itemCount: data.length,
+            itemBuilder: (context, index) {
+              var category = data[index];
+              return ListTile(
+                leading: const Icon(Icons.category),
+                title: Text(category.ad),
+                trailing: const Icon(Icons.arrow_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DocumanCategoryPage(catID: category.id, catName: category.ad),
+                    ),
+                  );
+                },
+              );
+            },
+          );
         },
       ),
     );

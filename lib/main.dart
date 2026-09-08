@@ -50,83 +50,48 @@ Future<Product> _getCategoryProductUsingStockCode(String stockCode) async {
   }
 }
 
+const AndroidNotificationChannel _highImportanceChannel = AndroidNotificationChannel(
+  'gemas_high_importance_channel',
+  'Gemaş Bildirimleri',
+  description: 'Gemaş mobil uygulama duyuru ve ürün bildirim kanalı',
+  importance: Importance.high,
+);
+
+final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
 Future<void> initializeFirebase() async {
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    await Future.delayed(Duration(seconds: 1));
-
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    print("[main.dart] Firebase initialized!");
 
-    RemoteMessage? initialMessage;
-    try {
-      await Future.delayed(Duration(seconds: 1));
-      initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-    } catch (error) {
-      debugPrint('[main.dart] FirebaseMessaging.instance.getInitialMessage() error: $error');
-    }
+    // Initialize local notifications plugin and channel for Android/iOS
+    const initializationSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    );
+    await _localNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.payload != null && response.payload!.isNotEmpty) {
+          try {
+            final Map<String, dynamic> data = json.decode(response.payload!);
+            _handleMessage(RemoteMessage(data: data));
+          } catch (e) {
+            debugPrint('[main.dart] Local notification click error: $e');
+          }
+        }
+      },
+    );
 
-    print("[main.dart] initialMessage: $initialMessage");
-
-    if (initialMessage != null) {
-      _handleMessage(initialMessage);
-    }
-
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      _handleMessage(message);
-    });
-
-    final locale = Get.deviceLocale;
-    final language = locale?.languageCode;
-
-    if (language == "tr") {
-      await FirebaseMessaging.instance.subscribeToTopic("newProductsTR");
-      await FirebaseMessaging.instance.subscribeToTopic("newNewsTR");
-      await FirebaseMessaging.instance.subscribeToTopic("updateSparePartsTR");
-      await FirebaseMessaging.instance.subscribeToTopic("updateProductPriceTR");
-      await FirebaseMessaging.instance.subscribeToTopic("updateDocumentationTR");
-
-      await FirebaseMessaging.instance.unsubscribeFromTopic("newProductsEN");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("newNewsEN");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("updateSparePartsEN");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("updateProductPriceEN");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("updateDocumentationEN");
-    } else {
-      await FirebaseMessaging.instance.subscribeToTopic("newProductsEN");
-      await FirebaseMessaging.instance.subscribeToTopic("newNewsEN");
-      await FirebaseMessaging.instance.subscribeToTopic("updateSparePartsEN");
-      await FirebaseMessaging.instance.subscribeToTopic("updateProductPriceEN");
-      await FirebaseMessaging.instance.subscribeToTopic("updateDocumentationEN");
-
-      await FirebaseMessaging.instance.unsubscribeFromTopic("newProductsTR");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("newNewsTR");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("updateSparePartsTR");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("updateProductPriceTR");
-      await FirebaseMessaging.instance.unsubscribeFromTopic("updateDocumentationTR");
-    }
-
-    // old
-    await FirebaseMessaging.instance.subscribeToTopic("NewsFromGemas");
-
-    // Test
-    // await FirebaseMessaging.instance.subscribeToTopic("a0b12"); // at 0.4.10 version 32
-    // await FirebaseMessaging.instance.subscribeToTopic("a0b13"); // at 0.4.10 version 32
-
-    await FirebaseMessaging.instance.subscribeToTopic("a0b15");
-    await FirebaseMessaging.instance.subscribeToTopic("a0b16");
-
-    final fcmToken = await FirebaseMessaging.instance.getToken();
-    debugPrint('FCM Token: $fcmToken');
-
-    FirebaseMessaging.instance.onTokenRefresh.listen((event) {
-      debugPrint('[main.dart] FCM Token Refreshed: $event');
-    }).onError((error) {
-      debugPrint('[main.dart] FCM Token Refreshed Error: $error');
-    });
+    await _localNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_highImportanceChannel);
 
     final messaging = FirebaseMessaging.instance;
 
-    NotificationSettings settings = await messaging.requestPermission(
+    // Request notification permissions
+    await messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -136,48 +101,114 @@ Future<void> initializeFirebase() async {
       sound: true,
     );
 
-    print('[main.dart] User granted permission: ${settings.authorizationStatus}');
+    // Check if app was opened via notification while terminated
+    try {
+      final initialMessage = await messaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleMessage(initialMessage);
+      }
+    } catch (e) {
+      debugPrint('[main.dart] getInitialMessage error: $e');
+    }
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      print('[main.dart] Got a message whilst in the foreground!');
-      print('[main.dart] Message data: ${message.data}');
-
-      if (message.notification != null)
-        print('Message also contained a notification: ${message.notification!.body}');
-
-      final notification = message.notification;
-      final android = AndroidNotificationDetails('channel id', 'channel name',
-          priority: Priority.high, importance: Importance.max, icon: '@mipmap/ic_launcher');
-
-      final iOS = DarwinNotificationDetails();
-      final platform = NotificationDetails(android: android, iOS: iOS);
-
-      FlutterLocalNotificationsPlugin().show(
-        notification!.hashCode,
-        notification.title,
-        notification.body,
-        platform,
-      );
+    // Listen to notification clicks when app is in background
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _handleMessage(message);
     });
+
+    // Foreground message handler with high priority channel
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('[main.dart] Foreground message received: ${message.messageId}');
+      final notification = message.notification;
+      if (notification != null) {
+        final androidDetails = AndroidNotificationDetails(
+          _highImportanceChannel.id,
+          _highImportanceChannel.name,
+          channelDescription: _highImportanceChannel.description,
+          priority: Priority.high,
+          importance: Importance.max,
+          icon: '@mipmap/ic_launcher',
+        );
+        const iOSDetails = DarwinNotificationDetails();
+        final details = NotificationDetails(android: androidDetails, iOS: iOSDetails);
+
+        _localNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          details,
+          payload: json.encode(message.data),
+        );
+      }
+    });
+
+    // Run topic subscriptions in background (non-blocking)
+    _setupTopicSubscriptions();
   } catch (error) {
     debugPrint('[main.dart] Firebase initialization error: $error');
   }
 }
 
+Future<void> _setupTopicSubscriptions() async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    final locale = Get.deviceLocale;
+    final language = locale?.languageCode ?? 'tr';
+
+    // Broadcast topic for all users (Admin panel general notifications)
+    final generalTopics = [
+      messaging.subscribeToTopic("allUsers"),
+      messaging.subscribeToTopic("NewsFromGemas"),
+    ];
+
+    List<Future<void>> languageTopics;
+    if (language == "tr") {
+      languageTopics = [
+        messaging.subscribeToTopic("newProductsTR"),
+        messaging.subscribeToTopic("newNewsTR"),
+        messaging.subscribeToTopic("updateSparePartsTR"),
+        messaging.subscribeToTopic("updateProductPriceTR"),
+        messaging.subscribeToTopic("updateDocumentationTR"),
+        messaging.unsubscribeFromTopic("newProductsEN"),
+        messaging.unsubscribeFromTopic("newNewsEN"),
+        messaging.unsubscribeFromTopic("updateSparePartsEN"),
+        messaging.unsubscribeFromTopic("updateProductPriceEN"),
+        messaging.unsubscribeFromTopic("updateDocumentationEN"),
+      ];
+    } else {
+      languageTopics = [
+        messaging.subscribeToTopic("newProductsEN"),
+        messaging.subscribeToTopic("newNewsEN"),
+        messaging.subscribeToTopic("updateSparePartsEN"),
+        messaging.subscribeToTopic("updateProductPriceEN"),
+        messaging.subscribeToTopic("updateDocumentationEN"),
+        messaging.unsubscribeFromTopic("newProductsTR"),
+        messaging.unsubscribeFromTopic("newNewsTR"),
+        messaging.unsubscribeFromTopic("updateSparePartsTR"),
+        messaging.unsubscribeFromTopic("updateProductPriceTR"),
+        messaging.unsubscribeFromTopic("updateDocumentationTR"),
+      ];
+    }
+
+    await Future.wait([...generalTopics, ...languageTopics]);
+    debugPrint('[main.dart] FCM topic subscriptions completed');
+  } catch (e) {
+    debugPrint('[main.dart] Topic subscription error: $e');
+  }
+}
+
 void _handleMessage(RemoteMessage initialMessage) async {
-  debugPrint('[main.dart] A new onMessageOpenedApp event was published!');
-  debugPrint('[main.dart] Message data: ${initialMessage.data}');
-  print("[main.dart] Handling a background message: (1) ${initialMessage.messageId}");
+  debugPrint('[main.dart] Handling a notification open: ${initialMessage.messageId}');
 
   Get.dialog(
-    Center(child: CircularProgressIndicator()),
+    const Center(child: CircularProgressIndicator()),
     barrierDismissible: false,
   );
 
   try {
-    print("[main.dart] Message.data stockCode: ${initialMessage.data["stockCode"]}");
-    await createProduct(initialMessage.data["stockCode"], initialMessage);
-    Get.back();
+    final stockCode = initialMessage.data["stockCode"];
+    await createProduct(stockCode, initialMessage);
+    if (Get.isDialogOpen ?? false) Get.back();
 
     if (product != null) {
       Get.to(() => ProductPage(product: product!));
@@ -185,66 +216,68 @@ void _handleMessage(RemoteMessage initialMessage) async {
       Get.to(() => HomePage());
     }
   } catch (e) {
-    print("[main.dart] Error handling message: $e");
-    Get.back();
+    debugPrint("[main.dart] Error handling message: $e");
+    if (Get.isDialogOpen ?? false) Get.back();
   }
 }
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("[main.dart] Handling a background message: (2) ${message.messageId}");
+  debugPrint("[main.dart] Background message received: ${message.messageId}");
 }
 
-Future<void> createProduct(stockCode, RemoteMessage message) async {
-  print("stockCode: $stockCode");
-
-  if (stockCode == null || stockCode == "") {
+Future<void> createProduct(dynamic stockCode, RemoteMessage message) async {
+  if (stockCode == null || stockCode.toString().isEmpty) {
     product = null;
     return;
   }
-
-  print("[main.dart] Message data: ${message.data}");
-  print("[main.dart] Message.data stockCode: ${message.data["stockCode"]}");
-  print("[main.dart] Message value: $message");
-
-  product = await _getCategoryProductUsingStockCode(stockCode);
-  print("[main.dart] product: $product");
+  try {
+    product = await _getCategoryProductUsingStockCode(stockCode.toString());
+  } catch (e) {
+    debugPrint("[main.dart] createProduct error: $e");
+    product = null;
+  }
 }
 
 void main() async {
-  runApp(MyApp());
-  print("[main.dart] main() started");
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeFirebase();
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (e) {
+    debugPrint("[main.dart] Firebase.initializeApp error: $e");
+  }
+
+  runApp(MyApp());
+
+  // Initialize notification channels, handlers and topics without blocking runApp
+  initializeFirebase();
 }
 
 class MyEnglishMessages extends UpgraderMessages {
+  @override
+  String get buttonTitleIgnore => 'Ignore';
 
-    @override
-    String get buttonTitleIgnore => 'Ignore';
+  @override
+  String get buttonTitleLater => 'Later';
 
-    @override
-    String get buttonTitleLater => 'Later';
+  @override
+  String get body => 'A new version of the app is available. Please update it now.';
 
-    @override
-    String get body => 'A new version of the app is available. Please update it now.';
+  @override
+  String get buttonTitleUpdate => 'Update Now';
 
-    @override
-    String get buttonTitleUpdate => 'Update Now';
+  @override
+  String get prompt => 'Would you like to update now?';
 
-    @override
-    String get prompt => 'Would you like to update now?';
+  @override
+  String get releaseNotes => 'Release Notes';
 
-    @override
-    String get releaseNotes => 'Release Notes';
-
-    @override
-    String get title => 'Update App?';
+  @override
+  String get title => 'Update App?';
 }
 
 class MyTurkishMessages extends UpgraderMessages {
-
   @override
   String get buttonTitleIgnore => 'Yoksay';
 
@@ -277,7 +310,6 @@ UpgraderMessages _getMessages() {
   }
 }
 
-// If the minAppVersion in the news section is less than 0.4.100, it does not update.
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -287,10 +319,9 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       translations: Messages(),
       locale: Get.deviceLocale,
-      fallbackLocale: Locale('en', 'US'),
+      fallbackLocale: const Locale('en', 'US'),
       home: UpgradeAlert(
         upgrader: Upgrader(
-          minAppVersion: "0.4.130",
           messages: _getMessages(),
         ),
         child: HomePage(),

@@ -15,33 +15,41 @@ class ProductPage extends StatelessWidget {
   const ProductPage({this.product, this.productId}) : super();
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final currentProduct = product;
+    final title = currentProduct?.ad ?? '';
+    final photos = currentProduct?.urunFoto ?? [];
+    final materials = currentProduct?.malzemeler ?? [];
+    final documents = currentProduct?.dokumanlar ?? [];
+
     return Scaffold(
-      appBar: GemasAppBar(title: product!.ad),
+      appBar: GemasAppBar(title: title),
       body: SingleChildScrollView(
-        physics: ClampingScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         child: Column(
           children: [
             Container(
               height: 300,
               color: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 30),
-              child: product!.urunFoto!.length > 0
+              padding: const EdgeInsets.symmetric(vertical: 30),
+              child: photos.isNotEmpty
                   ? Swiper(
-                      autoplay: product!.urunFoto!.length > 1 ? true : false,
-                      itemCount: product!.urunFoto!.length,
+                      autoplay: photos.length > 1,
+                      itemCount: photos.length,
                       itemBuilder: (BuildContext context, int index) {
                         return ClipRRect(
                           borderRadius: BorderRadius.circular(18),
                           child: CachedNetworkImage(
-                            imageUrl: Constants.DOMAIN + product!.urunFoto![index].foto,
+                            imageUrl: Constants.DOMAIN + photos[index].foto,
                             fit: BoxFit.cover,
+                            errorWidget: (context, url, error) =>
+                                Image.asset("assets/images/unnamed.png", fit: BoxFit.cover),
                           ),
                         );
                       },
                       viewportFraction: 0.8,
                       scale: 0.8,
-                      //pagination: SwiperPagination(),
                     )
                   : Image.asset("assets/images/unnamed.png"),
             ),
@@ -52,14 +60,14 @@ class ProductPage extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.all(10),
                     child: Text(
-                      product!.ad,
-                      style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
+                      title,
+                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                   ),
-                  product!.aciklama != null
+                  (currentProduct != null && currentProduct.aciklama.isNotEmpty)
                       ? Padding(
                           padding: const EdgeInsets.all(8.0),
-                          child: HtmlWidget(product!.aciklama),
+                          child: HtmlWidget(currentProduct.aciklama),
                         )
                       : Padding(
                           padding: const EdgeInsets.all(20.0),
@@ -68,7 +76,7 @@ class ProductPage extends StatelessWidget {
                 ],
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Card(
               elevation: 0,
               child: Column(
@@ -79,15 +87,15 @@ class ProductPage extends StatelessWidget {
                     padding: const EdgeInsets.all(20),
                     child: Text(
                       'modelList'.tr,
-                      style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
+                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                   ),
                   ListView.builder(
                     shrinkWrap: true,
-                    physics: ClampingScrollPhysics(),
-                    itemCount: product!.malzemeler?.length == 0 ? 0 : product!.malzemeler?.length,
+                    physics: const ClampingScrollPhysics(),
+                    itemCount: materials.length,
                     itemBuilder: (context, index) {
-                      var malzeme = product!.malzemeler![index];
+                      var malzeme = materials[index];
                       return Card(
                         elevation: 0,
                         child: ExpansionTile(
@@ -97,11 +105,11 @@ class ProductPage extends StatelessWidget {
                             children: [
                               Text(
                                 malzeme.stokKodu.toString(),
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                               ),
                               Text(
                                 malzeme.aciklama == "" ? "" : malzeme.aciklama,
-                                style: TextStyle(fontSize: 14),
+                                style: const TextStyle(fontSize: 14),
                               ),
                             ],
                           ),
@@ -118,10 +126,10 @@ class ProductPage extends StatelessWidget {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisAlignment: MainAxisAlignment.start,
                                       children: [
-                                        Text("price".tr, style: TextStyle(fontWeight: FontWeight.bold)),
-                                        Text("pieces".tr, style: TextStyle(fontWeight: FontWeight.bold)),
-                                        Text("weight".tr, style: TextStyle(fontWeight: FontWeight.bold)),
-                                        Text("volume".tr, style: TextStyle(fontWeight: FontWeight.bold))
+                                        Text("price".tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        Text("pieces".tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        Text("weight".tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        Text("volume".tr, style: const TextStyle(fontWeight: FontWeight.bold))
                                       ],
                                     ),
                                   ),
@@ -132,10 +140,10 @@ class ProductPage extends StatelessWidget {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         mainAxisAlignment: MainAxisAlignment.start,
                                         children: [
-                                          malzeme.fiyat != null ? Text(": " + malzeme.fiyat.toString() + " €") : Text(":"),
-                                          malzeme.paket != null ? Text(": " + malzeme.paket.toString()) : Text(":"),
-                                          malzeme.agirlik != null ? Text(": " + malzeme.agirlik.toString() + " Kg") : Text(":"),
-                                          malzeme.hacim != null ? Text(": " + malzeme.hacim.toString() + " m³") : Text(":"),
+                                          malzeme.fiyat != null ? Text(": " + malzeme.fiyat.toString() + " €") : const Text(":"),
+                                          malzeme.paket != null ? Text(": " + malzeme.paket.toString()) : const Text(":"),
+                                          malzeme.agirlik != null ? Text(": " + malzeme.agirlik.toString() + " Kg") : const Text(":"),
+                                          malzeme.hacim != null ? Text(": " + malzeme.hacim.toString() + " m³") : const Text(":"),
                                         ],
                                       ),
                                     ),
@@ -161,23 +169,23 @@ class ProductPage extends StatelessWidget {
                     padding: const EdgeInsets.all(20),
                     child: Text(
                       'documentList'.tr,
-                      style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
+                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                   ),
                   ListView.builder(
-                    physics: ClampingScrollPhysics(),
+                    physics: const ClampingScrollPhysics(),
                     shrinkWrap: true,
-                    itemCount: product!.dokumanlar?.length == 0 ? 0 : product!.dokumanlar?.length,
+                    itemCount: documents.length,
                     itemBuilder: (context, index) {
-                      var dokuman = product!.dokumanlar![index];
+                      var dokuman = documents[index];
 
-                      return dokuman.ad != null
+                      return dokuman.ad.isNotEmpty
                           ? Card(
                               elevation: 0,
                               child: ListTile(
-                                leading: Icon(Icons.picture_as_pdf),
+                                leading: const Icon(Icons.picture_as_pdf),
                                 title: Text(dokuman.ad),
-                                trailing: Icon(Icons.file_download),
+                                trailing: const Icon(Icons.file_download),
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute<dynamic>(
@@ -186,7 +194,7 @@ class ProductPage extends StatelessWidget {
                                 ),
                               ),
                             )
-                          : Text('');
+                          : const SizedBox.shrink();
                     },
                   ),
                 ],
